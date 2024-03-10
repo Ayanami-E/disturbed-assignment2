@@ -1,3 +1,5 @@
+from functools import wraps
+
 from flask import Flask, request, jsonify
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -36,36 +38,65 @@ def save_xml(tree):  # Save XML database file, use locks to secure threads Ancho
 def home():  # send welcome words
     return "Welcome to the Note Taking App!"
 
+# Define a decorator named `serialize_access` that takes a function `f` as its argument.
+def serialize_access(f):  # It is the most important part for add_note
+    @wraps(f)  # Define the inner function `decorated_function` that will wrap the original function `f`.
+    def decorated_function(*args, **kwargs):
+        with lock:  # Acquire the `lock` before executing the wrapped function. This ensures serialized access to the
+            # section of code that follows.
+            return f(*args, **kwargs)
+
+    return decorated_function
+
 
 @app.route('/add_note', methods=['POST'])
-def add_note():  # Adding annotations to subject-specific XML databases
+@serialize_access
+def add_note():
+    """
+    Adds a note to the XML database. Expects a JSON payload with 'topic', 'name', and 'text'.
+    - Returns 200 on successful addition.
+    - Returns 210 if any required data is missing from the request.
+    - Returns 500 for any internal errors like XML loading/creation or saving issues.
+    """
     try:
-        tree, root = load_or_create_xml()
-    except Exception as e:  # Prevents errors such as file non-existence and XML parsing errors
-        return jsonify({'error': str(e)}), 500
+        tree, root = load_or_create_xml()  # Attempt to load or create the XML database
+    except FileNotFoundError:
+        # If the XML file does not exist, create a new XML structure
+        root = ET.Element('data')
+        tree = ET.ElementTree(root)
+    except Exception as e:
+        # Log any exceptions during XML loading/creation and return a server error
+        app.logger.error(f"XML Load/Create Error: {str(e)}")
+        return jsonify({'error': 'Failed to load or create XML file'}), 500
 
-    data = request.json
-    topic, name, text = data.get('topic'), data.get('name'), data.get('text')
+    data = request.json  # Extract the JSON data from the request
+    if not data or 'topic' not in data or 'name' not in data or 'text' not in data:
+        # If any required field is missing, return an error
+        return jsonify({'error': 'Missing data for topic, name, or text'}), 210
 
-    if not (topic and name and text):
-        return jsonify({'error': 'Missing data for topic, name, or text'}), 400
+    # Extract required fields from the data
+    topic, name, text = data['topic'], data['name'], data['text']
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Generate a timestamp for the note
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    with lock:
+    with lock:  # Ensure thread-safe access to the XML database
         topic_element = root.find(f".//topic[@name='{topic}']")
         if not topic_element:
+            # If the topic does not exist, create a new topic element
             topic_element = ET.SubElement(root, 'topic', name=topic)
+        # Create a new note element under the topic
         note_element = ET.SubElement(topic_element, 'note', name=name)
-        ET.SubElement(note_element, 'text').text = text
-        ET.SubElement(note_element, 'timestamp').text = timestamp
+        ET.SubElement(note_element, 'text').text = text  # Add the note's text
+        ET.SubElement(note_element, 'timestamp').text = timestamp  # Add the timestamp
 
         try:
-            save_xml(tree)
-        except Exception as e:  # Prevention of file system problems
-            return jsonify({'error': str(e)}), 500
+            save_xml(tree)  # Attempt to save the updated XML database
+        except Exception as e:
+            # Log any exceptions during saving and return a server error
+            app.logger.error(f"XML Save Error: {str(e)}")
+            return jsonify({'error': 'Failed to save note'}), 500
 
-    return jsonify({'message': 'Note added successfully'}), 200
+    return jsonify({'message': 'Note added successfully'}), 200  # Return success message
+
 
 
 @app.route('/get_notes', methods=['GET'])
@@ -130,7 +161,7 @@ def add_wiki_info():
     try:
         tree, root = load_or_create_xml()  # try to find or load
     except Exception as e:  # if not, return the error
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 401
 
     wiki_url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={search_term}&limit=1&namespace=0&format=json"
 
@@ -153,11 +184,11 @@ def add_wiki_info():
         else:  # Without the wiki article
             return jsonify({'message': 'No Wikipedia article found for the search term'}), 404
     except requests.RequestException as e:  # API error handling
-        return jsonify({'error': 'Failed to query Wikipedia', 'message': str(e)}), 500
+        return jsonify({'error': 'Failed to query Wikipedia', 'message': str(e)}), 405
     except ValueError as e:  # Handling JSON encoding errors
-        return jsonify({'error': 'Failed to decode Wikipedia response', 'message': str(e)}), 500
+        return jsonify({'error': 'Failed to decode Wikipedia response', 'message': str(e)}), 406
     except Exception as e:  # Handling other errors
-        return jsonify({'error': 'Failed to add Wikipedia information', 'message': str(e)}), 500
+        return jsonify({'error': 'Failed to add Wikipedia information', 'message': str(e)}), 407
 
     return jsonify({'message': 'Wikipedia information added successfully'}), 200  # return success message
 

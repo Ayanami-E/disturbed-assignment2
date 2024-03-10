@@ -23,6 +23,6 @@ def send_request(note_id):
 
 
 # Use ThreadPoolExecutor for concurrent execution
-with ThreadPoolExecutor(max_workers=3) as executor:
+with ThreadPoolExecutor(max_workers=4) as executor:
     # Send 3 concurrent requests as an example
-    executor.map(send_request, range(1, 4))
+    executor.map(send_request, range(1, 5))
