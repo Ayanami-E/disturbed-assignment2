@@ -8,4 +8,4 @@ Service.py Features:
 Test.py Strategy:
 "Our testing framework in test.py addresses Scalability by employing ThreadPoolExecutor for simulating concurrent remote procedure calls, crucial for evaluating the system's performance under load. It aligns with Heterogeneity, as it tests the system's ability to handle a variety of request types simultaneously. The built-in feedback mechanism demonstrates our commitment to Failure handling, as it allows us to promptly detect, diagnose, and address issues as they arise. This approach ensures that failures in individual tests do not compromise the overall system integrity. Moreover, this testing simulates real-world scenarios to ensure that our system remains Transparent to users, maintaining a seamless experience even under stress. Through rigorous testing, we also ensure that the system remains Secure and Open for future extensions and improvements, thus meeting our design challenges head-on."
 
-By incorporating these elements, your presentation will comprehensively cover the crucial aspects of distributed system design, showcasing the depth and robustness of your note-taking application.
+
